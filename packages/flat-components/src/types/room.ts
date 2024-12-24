@@ -4,7 +4,8 @@ export type RoomInfo = {
     inviteCode?: string;
     roomType?: RoomType;
     periodicUUID?: string;
-    ownerUserName?: string;
+    ownerName?: string;
+    ownerAvatarURL?: string;
     title?: string;
     roomStatus?: RoomStatus;
     beginTime?: number;
@@ -19,6 +20,7 @@ export type RoomInfo = {
         endTime: number;
         videoURL?: string;
     }>;
+    isPmi?: boolean;
 };
 
 export enum RoomType {

@@ -1,6 +1,6 @@
 import { windowManager } from "../window-manager";
 import { ipc } from "flat-types";
-import { app, ipcMain, powerSaveBlocker } from "electron";
+import { app, ipcMain, powerSaveBlocker, nativeTheme } from "electron";
 import runtime from "./runtime";
 import { updateService } from "./update-service";
 import { update } from "flat-types";
@@ -48,6 +48,11 @@ const windowActionAsync = (customWindow: CustomWindow): ipc.WindowActionAsync =>
 
             window.setSize(args.width, args.height);
 
+            // There's no such method on Windows.
+            if (window.setTrafficLightPosition) {
+                window.setTrafficLightPosition(args.trafficLightPosition || { x: 5, y: 12 });
+            }
+
             if (args.autoCenter) {
                 window.center();
             }
@@ -69,32 +74,45 @@ const windowActionAsync = (customWindow: CustomWindow): ipc.WindowActionAsync =>
             //
             // window.setFullScreenable(isReset);
         },
-        "disable-window": args => {
-            options.disableClose = args.disable;
+        "intercept-native-window-close": args => {
+            options.interceptClose = args.intercept;
         },
         "set-title": args => {
             window.setTitle(args.title);
         },
-        "set-prevent-sleep": args =>
-            (() => {
-                let powerSaveBlockerId = 0;
-                return () => {
-                    if (args.enable) {
-                        if (!powerSaveBlocker.isStarted(powerSaveBlockerId)) {
-                            powerSaveBlockerId = powerSaveBlocker.start("prevent-display-sleep");
-                        }
-                    } else {
-                        if (powerSaveBlocker.isStarted(powerSaveBlockerId)) {
-                            powerSaveBlocker.stop(powerSaveBlockerId);
-                        }
-                    }
-                };
-            })(),
-        "start-update": args => {
-            updateService.update(args.prereleaseTag);
+        "force-close-window": () => {
+            windowManager.remove(customWindow);
         },
-        "cancel-update": () => {
-            updateService.cancel();
+        "set-visual-zoom-level": args => {
+            customWindow.window.webContents
+                .setVisualZoomLevelLimits(args.minimumLevel, args.maximumLevel)
+                .catch(console.error);
+        },
+        "set-win-status": args => {
+            switch (args.windowStatus) {
+                case "minimize": {
+                    window.minimize();
+                    break;
+                }
+                case "maximize": {
+                    if (window.isMaximized()) {
+                        window.unmaximize();
+                    } else {
+                        window.maximize();
+                    }
+                    break;
+                }
+                case "close": {
+                    window.close();
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+        },
+        "set-theme": args => {
+            nativeTheme.themeSource = args.theme === "auto" ? "system" : args.theme;
         },
     };
 };
@@ -106,8 +124,26 @@ export const appActionAsync: ipc.AppActionAsync = {
             openAsHidden: false,
         });
     },
-    "force-close-window": ({ windowName }) => {
-        windowManager.remove(windowName);
+    "set-prevent-sleep": args =>
+        (() => {
+            let powerSaveBlockerId = 0;
+            return () => {
+                if (args.enable) {
+                    if (!powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+                        powerSaveBlockerId = powerSaveBlocker.start("prevent-display-sleep");
+                    }
+                } else {
+                    if (powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+                        powerSaveBlocker.stop(powerSaveBlockerId);
+                    }
+                }
+            };
+        })(),
+    "start-update": args => {
+        updateService.update(args.prereleaseTag);
+    },
+    "cancel-update": () => {
+        updateService.cancel();
     },
 };
 
@@ -139,6 +175,15 @@ export const appActionSync: ipc.AppActionSync = {
 
         return beta.hasNewVersion ? beta : stable;
     },
+    "can-create-window": args => {
+        const customWindow = windowManager.windowType(args.windowName);
+
+        // multi instance window type => true
+        // single instance window type + current no window => true
+        const result = customWindow.isMultiInstance || customWindow.isEmpty();
+
+        return Promise.resolve(result);
+    },
 };
 
 export const injectionWindowIPCAction = (customWindow: CustomWindow): void => {
@@ -149,9 +194,17 @@ export const injectionWindowIPCAction = (customWindow: CustomWindow): void => {
             args: {
                 actions: keyof ipc.WindowActionAsync;
                 args: any;
+                browserWindowID: number;
             },
         ) => {
-            windowActionAsync(customWindow)[args.actions](args.args);
+            const realCustomWindow = windowManager
+                .windowType(customWindow.options.name)
+                .getWin(args.browserWindowID);
+
+            if (realCustomWindow) {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                windowActionAsync(realCustomWindow)[args.actions](args.args);
+            }
         },
     );
 };

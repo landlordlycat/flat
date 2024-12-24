@@ -1,7 +1,7 @@
 .device-test-panel-title-box {
     font-size: 16px;
     padding-bottom: 32px;
-    color: #444e60;
+    color: var(--text-strong);
 }
 
 .device-test-panel-inner-box {
@@ -25,7 +25,16 @@
 }
 
 .device-test-panel-tips-radio {
-    > .ant-checkbox-wrapper {
-        color: #7a7b7c;
+    >.ant-checkbox-wrapper {
+        color: var(--text);
     }
+}
+
+.device-test-panel-join-options>.ant-checkbox-wrapper {
+    color: var(--text);
+}
+
+.device-test-panel-join-options-text {
+    color: #7a7b7c;
+    padding-bottom: 8px;
 }

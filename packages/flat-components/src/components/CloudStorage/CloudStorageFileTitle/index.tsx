@@ -8,37 +8,37 @@ import videoSVG from "./icons/video.svg";
 import wordSVG from "./icons/word.svg";
 import convertingSVG from "./icons/converting.svg";
 import convertErrorSVG from "./icons/convert-error.svg";
-import vfSVG from "./icons/vf.svg";
-import iceSVG from "./icons/ice.svg";
+import directorySVG from "./icons/directory.svg";
 
 import React, { useMemo } from "react";
 import classNames from "classnames";
-import { CloudStorageConvertStatusType, CloudStorageFileName } from "../types";
+import { CloudStorageFileName } from "../types";
 import { CloudStorageFileTitleRename } from "./CloudStorageFileTitleRename";
-import { useTranslation } from "react-i18next";
+import { useTranslate } from "@netless/flat-i18n";
+import { FileConvertStep, FileResourceType, ResourceType } from "@netless/flat-server-api";
+import { DirectoryInfo } from "../../../containers/CloudStorageContainer";
+import { CloudStorageNewDirectory } from "./CloudStorageNewDirectory";
+import { useHistory } from "react-router-dom";
 
 export interface CloudStorageFileTitleProps
     extends React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement> {
-    /** file UUID */
     fileUUID: string;
-    /** File Name */
     fileName: string;
-    /** Cloud converting status */
-    convertStatus?: CloudStorageConvertStatusType;
-    /** Is title clickable. Default false */
+    convertStatus?: FileConvertStep;
     titleClickable?: boolean;
-    /** When title is clicked */
-    onTitleClick?: (fileUUID: string) => void;
     /** UUID of file that is under renaming */
     renamingFileUUID?: string;
-    /** Rename file. Empty name for cancelling */
+    resourceType?: ResourceType;
+    parentDirectoryPath?: string;
+    onTitleClick?: (fileUUID: string, pushHistory: (path: string) => void) => void;
     onRename?: (fileUUID: string, fileName?: CloudStorageFileName) => void;
+    onNewDirectoryFile?: (directoryInfo: DirectoryInfo) => Promise<void>;
 }
 
 /**
  * Render a file icon in front of file name according to file extension.
  */
-export const CloudStorageFileTitle = React.memo<CloudStorageFileTitleProps>(
+export const CloudStorageFileTitle = /* @__PURE__ */ React.memo<CloudStorageFileTitleProps>(
     function CloudStorageFileTitle({
         fileUUID,
         fileName,
@@ -47,12 +47,21 @@ export const CloudStorageFileTitle = React.memo<CloudStorageFileTitleProps>(
         onTitleClick,
         renamingFileUUID,
         onRename,
+        onNewDirectoryFile,
+        resourceType,
+        parentDirectoryPath,
         ...restProps
     }) {
-        const { t } = useTranslation();
-        const isConverting = convertStatus === "converting";
-        const isConvertError = !isConverting && convertStatus === "error";
+        const t = useTranslate();
+        const isConverting = convertStatus === FileConvertStep.Converting;
+        const isConvertError = !isConverting && convertStatus === FileConvertStep.Failed;
         const fileIcon = useMemo(() => getFileIcon(fileName), [fileName]);
+        const history = useHistory();
+
+        const pushHistory = (path: string): void => {
+            const search = new URLSearchParams({ path }).toString();
+            history.push({ search });
+        };
 
         return (
             <span
@@ -60,8 +69,8 @@ export const CloudStorageFileTitle = React.memo<CloudStorageFileTitleProps>(
                     isConvertError
                         ? t("transcoding-failure")
                         : isConverting
-                        ? t("transcoding-in-progress")
-                        : ""
+                          ? t("transcoding-in-progress")
+                          : ""
                 }${fileName}`}
                 {...restProps}
                 className={classNames(restProps.className, "cloud-storage-file-title", {
@@ -70,34 +79,43 @@ export const CloudStorageFileTitle = React.memo<CloudStorageFileTitleProps>(
             >
                 <span className="cloud-storage-file-title-icon-wrap">
                     <img
+                        aria-hidden
                         className="cloud-storage-file-title-icon"
+                        height={22}
                         src={fileIcon}
                         width={22}
-                        height={22}
-                        aria-hidden
                     />
                     {isConverting ? (
                         <img
+                            aria-hidden
                             className="cloud-storage-file-title-converting"
+                            height={11}
                             src={convertingSVG}
                             width={11}
-                            height={11}
-                            aria-hidden
                         />
                     ) : isConvertError ? (
                         <img
+                            aria-hidden
                             className="cloud-storage-file-title-convert-error"
+                            height={11}
                             src={convertErrorSVG}
                             width={11}
-                            height={11}
-                            aria-hidden
                         />
                     ) : null}
                 </span>
+                {parentDirectoryPath &&
+                    resourceType === FileResourceType.Directory &&
+                    fileUUID === "temporaryDirectory" && (
+                        <CloudStorageNewDirectory
+                            parentDirectoryPath={parentDirectoryPath}
+                            onNewDirectory={onNewDirectoryFile}
+                        />
+                    )}
                 {renamingFileUUID === fileUUID ? (
                     <CloudStorageFileTitleRename
-                        fileUUID={fileUUID}
                         fileName={fileName}
+                        fileResourceType={resourceType}
+                        fileUUID={fileUUID}
                         onRename={onRename}
                     />
                 ) : titleClickable ? (
@@ -105,7 +123,7 @@ export const CloudStorageFileTitle = React.memo<CloudStorageFileTitleProps>(
                         className="cloud-storage-file-title-content"
                         onClick={e => {
                             e.preventDefault();
-                            onTitleClick && onTitleClick(fileUUID);
+                            onTitleClick && onTitleClick(fileUUID, pushHistory);
                         }}
                     >
                         {fileName}
@@ -161,11 +179,8 @@ function getFileIcon(fileName: string): string {
         case ".flac": {
             return audioSVG;
         }
-        case ".vf": {
-            return vfSVG;
-        }
-        case ".ice": {
-            return iceSVG;
+        case "": {
+            return directorySVG;
         }
         default: {
             return defaultSVG;

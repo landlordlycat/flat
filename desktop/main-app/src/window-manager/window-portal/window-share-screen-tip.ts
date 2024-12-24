@@ -2,8 +2,10 @@ import { AbstractWindow, CustomWindow } from "../abstract";
 import { constants } from "flat-types";
 import { getDisplayByMainWindow, getXCenterPoint } from "./utils";
 
-export class WindowShareScreenTip extends AbstractWindow {
-    public readonly name = constants.WindowsName.ShareScreenTip;
+export class WindowShareScreenTip extends AbstractWindow<false> {
+    public constructor() {
+        super(false, constants.WindowsName.ShareScreenTip);
+    }
 
     public create(options: Electron.BrowserWindowConstructorOptions): CustomWindow {
         const display = getDisplayByMainWindow();
@@ -14,7 +16,7 @@ export class WindowShareScreenTip extends AbstractWindow {
                 name: constants.WindowsName.ShareScreenTip,
                 isOpenDevTools: false,
                 isPortal: true,
-                disableClose: true,
+                interceptClose: true,
             },
             {
                 x: getXCenterPoint(display, constants.PageSize.ShareScreenTip.width),
@@ -25,6 +27,9 @@ export class WindowShareScreenTip extends AbstractWindow {
                 webContents: options.webContents,
                 ...constants.PageSize.ShareScreenTip,
                 frame: false,
+                // in order to hidden macOS window button, here need to override the titleBarStyle.
+                // see: https://www.electronjs.org/docs/latest/tutorial/window-customization#show-and-hide-the-traffic-lights-programmatically-macos
+                titleBarStyle: "default",
             },
         );
 
